@@ -11,6 +11,10 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // We no longer need the client timezone offset because we rely on GitHub's
+  // own contribution calendar, which is already calculated using each
+  // commit's timezone.
+
   try {
     // Get user info first to get the username
     const userData = await fetchWithToken("https://api.github.com/user", token);
@@ -20,212 +24,93 @@ export async function GET(request: NextRequest) {
       throw new Error("Could not determine GitHub username");
     }
 
-    console.log(`Fetching events for user: ${username}`);
+    console.log(`Fetching contribution calendar for user: ${username}`);
 
     // Initialize contribution data for 100 days starting from June 10th, 2025
     const activityData: { [key: string]: number } = {};
-    const startDate = new Date(2025, 5, 10); // Month is 0-indexed, so 5 = June
+    const startDate = new Date(Date.UTC(2025, 5, 10, 0, 0, 0)); // Use explicit UTC to avoid host tz issues
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 99); // Inclusive 100-day window
 
-    // Initialize all days with 0 contributions
+    // Pre-fill activityData with zeroes
     for (let i = 0; i < 100; i++) {
-      const date = new Date(startDate);
-      date.setDate(date.getDate() + i);
-      // Use local timezone for date string to match event processing
-      const localDate = new Date(
-        date.getTime() - date.getTimezoneOffset() * 60000
-      );
-      const dateString = localDate.toISOString().split("T")[0];
+      const day = new Date(startDate);
+      day.setUTCDate(day.getUTCDate() + i);
+      const dateString = day.toISOString().split("T")[0];
       activityData[dateString] = 0;
     }
 
-    // Calculate date range for filtering
-    const endDate = new Date(startDate);
-    endDate.setDate(endDate.getDate() + 99); // 100 days total
-
-    if (process.env.NODE_ENV === "development") {
-      console.log(
-        `Fetching user events from ${startDate.toISOString()} to ${endDate.toISOString()}`
-      );
-    }
-
-    // Fetch user events with pagination to extract GitHub contributions
-    // Using /users/{username}/events to match GitHub's contribution graph calculation
-    let page = 1;
-    const eventsPerPage = 100;
-    let allEvents: any[] = [];
-
-    while (page <= 10) {
-      // Limit to 10 pages (1000 events) to avoid rate limits
-      try {
-        const eventsData = await fetchWithToken(
-          `https://api.github.com/users/${username}/events?per_page=${eventsPerPage}&page=${page}`,
-          token
-        );
-
-        if (!eventsData || eventsData.length === 0) break;
-
-        // Filter events within our date range
-        const filteredEvents = eventsData.filter((event: any) => {
-          const eventDate = new Date(event.created_at);
-          return eventDate >= startDate && eventDate <= endDate;
-        });
-
-        allEvents = allEvents.concat(filteredEvents);
-
-        // If we get events older than our start date, we can stop
-        const oldestEventDate = new Date(
-          eventsData[eventsData.length - 1].created_at
-        );
-        if (oldestEventDate < startDate) {
-          break;
+    // Build GraphQL query to match GitHub's own contribution calendar
+    const gqlQuery = `
+      query ($login: String!, $from: DateTime!, $to: DateTime!) {
+        user(login: $login) {
+          contributionsCollection(from: $from, to: $to) {
+            contributionCalendar {
+              weeks {
+                contributionDays {
+                  date
+                  contributionCount
+                }
+              }
+            }
+          }
         }
-
-        if (eventsData.length < eventsPerPage) break;
-        page++;
-      } catch (error) {
-        console.warn(`Failed to fetch events page ${page}:`, error);
-        break;
       }
+    `;
+
+    const gqlBody = {
+      query: gqlQuery,
+      variables: {
+        login: username,
+        from: startDate.toISOString(),
+        to: new Date(endDate.getTime() + 24 * 60 * 60 * 1000).toISOString(), // GraphQL range is inclusive-exclusive
+      },
+    };
+
+    const graphQLResponse = await fetch("https://api.github.com/graphql", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/vnd.github+json",
+      },
+      body: JSON.stringify(gqlBody),
+    });
+
+    if (!graphQLResponse.ok) {
+      const errorText = await graphQLResponse.text();
+      console.error("GitHub GraphQL error:", errorText);
+      throw new Error("Failed to fetch contribution calendar via GraphQL");
     }
 
-    console.log(`Fetched ${allEvents.length} events in date range`);
+    const graphQLData = await graphQLResponse.json();
 
-    // Process events and count contributions per day (matching GitHub's contribution graph)
-    for (const event of allEvents) {
-      const eventDate = new Date(event.created_at);
-      // Convert to user's local timezone for date extraction
-      const localEventDate = new Date(
-        eventDate.getTime() - eventDate.getTimezoneOffset() * 60000
-      );
-      const eventDateString = localEventDate.toISOString().split("T")[0];
+    const weeks =
+      graphQLData?.data?.user?.contributionsCollection?.contributionCalendar
+        ?.weeks || [];
 
-      const today = new Date();
-      const localToday = new Date(
-        today.getTime() - today.getTimezoneOffset() * 60000
-      );
-      const todayString = localToday.toISOString().split("T")[0];
-
-      // Count contributions exactly like GitHub's profile page
-      if (activityData.hasOwnProperty(eventDateString)) {
-        switch (event.type) {
-          case "PushEvent":
-            // Count commits to any branch (not just main/master)
-            const commitCount = event.payload?.commits?.length || 1;
-            activityData[eventDateString] += commitCount;
-
-            // Debug logging for today's activity (development only)
-            if (
-              process.env.NODE_ENV === "development" &&
-              eventDateString === todayString
-            ) {
-              console.log(`🚀 PushEvent on ${eventDateString} (local time):`);
-              console.log(`  - Original UTC time: ${event.created_at}`);
-              console.log(`  - Local time: ${localEventDate.toISOString()}`);
-              console.log(`  - Repo: ${event.repo?.name}`);
-              console.log(`  - Branch: ${event.payload?.ref}`);
-              console.log(`  - Commits in this push: ${commitCount}`);
-              console.log(
-                `  - Commit details:`,
-                event.payload?.commits?.map((c: any) => ({
-                  sha: c.sha?.substring(0, 7),
-                  message: c.message?.substring(0, 50) + "...",
-                }))
-              );
-              console.log(
-                `  - Running total for today: ${activityData[eventDateString]}`
-              );
-            }
-            break;
-          case "IssuesEvent":
-            // Only count when opening issues (not comments/closes)
-            if (event.payload?.action === "opened") {
-              activityData[eventDateString] += 1;
-              if (
-                process.env.NODE_ENV === "development" &&
-                eventDateString === todayString
-              ) {
-                console.log(
-                  `📝 Issue opened on ${eventDateString}: ${event.payload?.issue?.title}`
-                );
-              }
-            }
-            break;
-          case "PullRequestEvent":
-            // Only count when opening PRs (not comments/closes)
-            if (event.payload?.action === "opened") {
-              activityData[eventDateString] += 1;
-              if (
-                process.env.NODE_ENV === "development" &&
-                eventDateString === todayString
-              ) {
-                console.log(
-                  `🔀 PR opened on ${eventDateString}: ${event.payload?.pull_request?.title}`
-                );
-              }
-            }
-            break;
-          case "PullRequestReviewEvent":
-            // Count PR reviews submitted
-            if (event.payload?.action === "submitted") {
-              activityData[eventDateString] += 1;
-              if (
-                process.env.NODE_ENV === "development" &&
-                eventDateString === todayString
-              ) {
-                console.log(`👀 PR review submitted on ${eventDateString}`);
-              }
-            }
-            break;
-          // GitHub doesn't count other activities as "contributions"
-          default:
-            if (
-              process.env.NODE_ENV === "development" &&
-              eventDateString === todayString
-            ) {
-              console.log(
-                `ℹ️ Ignored event type on ${eventDateString}: ${event.type}`
-              );
-            }
-            break;
+    for (const week of weeks) {
+      for (const day of week.contributionDays) {
+        const { date, contributionCount } = day;
+        if (activityData.hasOwnProperty(date)) {
+          activityData[date] = contributionCount;
         }
       }
     }
 
     if (process.env.NODE_ENV === "development") {
       console.log(
-        `📊 Final count for today (${
-          new Date().toISOString().split("T")[0]
-        } UTC / ${
-          new Date(
-            new Date().getTime() - new Date().getTimezoneOffset() * 60000
-          )
-            .toISOString()
-            .split("T")[0]
-        } local): ${
-          activityData[
-            new Date(
-              new Date().getTime() - new Date().getTimezoneOffset() * 60000
-            )
-              .toISOString()
-              .split("T")[0]
-          ] || 0
-        } contributions`
+        `GraphQL calendar processed; found activity on ${
+          Object.keys(activityData).filter((d) => activityData[d] > 0).length
+        } days`
       );
     }
 
-    // No need to round since contributions are whole numbers
-
-    // Convert to array format
+    // Convert to array format for client consumption
     const result = Object.entries(activityData).map(([date, count]) => ({
       date,
       count,
     }));
-
-    console.log(
-      `Processed ${allEvents.length} events, found activity on ${
-        result.filter((r) => r.count > 0).length
-      } days`
-    );
 
     return NextResponse.json(result);
   } catch (error) {
