@@ -81,11 +81,20 @@ export default function GitHubStreakTracker() {
   };
 
   useEffect(() => {
-    // Check if user is already logged in
-    const token = localStorage.getItem("github_token");
-    if (token) {
-      fetchUserData();
-    }
+    // Check if user is already logged in by calling the auth status endpoint
+    const checkAuthStatus = async () => {
+      try {
+        const response = await fetch("/api/auth/status");
+        const data = await response.json();
+        if (data.authenticated) {
+          fetchUserData();
+        }
+      } catch (error) {
+        console.error("Error checking auth status:", error);
+      }
+    };
+
+    checkAuthStatus();
 
     // Check for error parameters in URL
     const urlParams = new URLSearchParams(window.location.search);
