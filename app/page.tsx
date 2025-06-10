@@ -22,6 +22,16 @@ interface CommitActivity {
   count: number;
 }
 
+interface CalendarDay {
+  date: string;
+  hasCommits: boolean;
+  isToday: boolean;
+  dayNumber: number;
+  dayOfWeek: string;
+  monthDay: number;
+  month: string;
+}
+
 export default function GitHubStreakTracker() {
   const [user, setUser] = useState<GitHubUser | null>(null);
   const [commitData, setCommitData] = useState<CommitActivity[]>([]);
@@ -53,23 +63,38 @@ export default function GitHubStreakTracker() {
 
       // Calculate streak and today's commits
       const today = new Date().toISOString().split("T")[0];
-      const todayActivity = activityData.find(
-        (day: CommitActivity) => day.date === today
-      );
+      const startDate = new Date(2025, 5, 10); // June 10th, 2025
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 99); // 100 days total (0-99)
+
+      // Check if today falls within our challenge period
+      const todayDate = new Date();
+      const isInChallengePeriod =
+        todayDate >= startDate && todayDate <= endDate;
+
+      // Find today's activity only if we're in the challenge period
+      const todayActivity = isInChallengePeriod
+        ? activityData.find((day: CommitActivity) => day.date === today)
+        : null;
       setTodayCommits(todayActivity?.count || 0);
 
-      // Calculate current streak
+      // Calculate current streak - consecutive days with commits ending on the most recent commit day
       let streak = 0;
       const sortedData = activityData.sort(
         (a: CommitActivity, b: CommitActivity) =>
-          new Date(b.date).getTime() - new Date(a.date).getTime()
+          new Date(b.date).getTime() - new Date(a.date).getTime() // Sort reverse chronologically
       );
 
+      // Find the most recent day with commits and count backwards
+      let foundCommitDay = false;
       for (const day of sortedData) {
-        if (day.count > 0) {
-          streak++;
-        } else {
-          break;
+        if (!foundCommitDay && day.count > 0) {
+          foundCommitDay = true;
+          streak = 1; // Start counting from the most recent commit day
+        } else if (foundCommitDay && day.count > 0) {
+          streak++; // Continue the streak
+        } else if (foundCommitDay && day.count === 0) {
+          break; // End of streak
         }
       }
       setCurrentStreak(streak);
@@ -105,29 +130,68 @@ export default function GitHubStreakTracker() {
     }
   }, []);
 
-  const generateCalendarDays = () => {
-    const days = [];
+  const generateCalendarDays = (): CalendarDay[] => {
+    const days: CalendarDay[] = [];
+    // Start from June 10th, 2025
+    const startDate = new Date(2025, 5, 10); // Month is 0-indexed, so 5 = June
     const today = new Date();
 
-    for (let i = 99; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const monthNames = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+
+    for (let i = 0; i < 100; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
       const dateString = date.toISOString().split("T")[0];
       const activity = commitData.find((day) => day.date === dateString);
-      const hasCommits = activity && activity.count > 0;
+      const hasCommits = !!(activity && activity.count > 0);
+
+      // Check if this date is today
+      const todayString = today.toISOString().split("T")[0];
+      const isToday = dateString === todayString;
 
       days.push({
         date: dateString,
         hasCommits,
-        isToday: i === 0,
-        dayNumber: 100 - i,
+        isToday,
+        dayNumber: i + 1,
+        dayOfWeek: dayNames[date.getDay()],
+        monthDay: date.getDate(),
+        month: monthNames[date.getMonth()],
       });
     }
 
     return days;
   };
 
-  const completedDays = commitData.filter((day) => day.count > 0).length;
+  // Calculate progress based on the 100-day challenge period
+  const challengeStartDate = new Date(2025, 5, 10); // June 10th, 2025
+  const challengeEndDate = new Date(challengeStartDate);
+  challengeEndDate.setDate(challengeEndDate.getDate() + 99); // 100 days total
+
+  // Filter days that are within the challenge period and have commits
+  const completedDays = commitData.filter((day) => {
+    const dayDate = new Date(day.date);
+    return (
+      dayDate >= challengeStartDate &&
+      dayDate <= challengeEndDate &&
+      day.count > 0
+    );
+  }).length;
+
   const progressPercentage = (completedDays / 100) * 100;
 
   if (!user) {
@@ -239,9 +303,22 @@ export default function GitHubStreakTracker() {
             <CardContent>
               <div className="text-3xl font-bold mb-2">{todayCommits}</div>
               <p className="text-sm text-white/90">
-                {todayCommits > 0
-                  ? "Great job today! 🎉"
-                  : "No commits yet today"}
+                {(() => {
+                  const today = new Date();
+                  const challengeStart = new Date(2025, 5, 10);
+                  const challengeEnd = new Date(challengeStart);
+                  challengeEnd.setDate(challengeEnd.getDate() + 99);
+
+                  if (today < challengeStart) {
+                    return `Challenge starts ${challengeStart.toLocaleDateString()}`;
+                  } else if (today > challengeEnd) {
+                    return "Challenge completed! 🏆";
+                  } else if (todayCommits > 0) {
+                    return "Great job today! 🎉";
+                  } else {
+                    return "No commits yet today";
+                  }
+                })()}
               </p>
             </CardContent>
           </Card>
@@ -269,42 +346,52 @@ export default function GitHubStreakTracker() {
           <CardHeader>
             <CardTitle className="flex items-center text-white">
               <Calendar className="w-5 h-5 mr-2" />
-              100 Day Challenge Calendar
+              100 Day Challenge Calendar (Starting June 10, 2025)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-10 gap-2">
+            <div className="grid grid-cols-7 gap-3">
               {calendarDays.map((day) => (
                 <div
                   key={day.date}
                   className={`
-                    w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium
+                    relative rounded-xl p-3 flex flex-col items-center justify-center text-xs font-medium min-h-[80px] transition-all duration-300 hover:scale-105 border-2
                     ${
                       day.isToday
-                        ? "bg-yellow-400 text-black ring-2 ring-yellow-300"
+                        ? "bg-gradient-to-br from-yellow-400 to-yellow-500 text-black border-yellow-300 shadow-lg shadow-yellow-400/50"
                         : day.hasCommits
-                        ? "bg-green-400 text-white"
-                        : "bg-white/20 text-white/60"
+                        ? "bg-gradient-to-br from-green-400 to-green-500 text-white border-green-300 shadow-lg shadow-green-400/30"
+                        : "bg-white/10 text-white/70 border-white/20 hover:bg-white/20"
                     }
                   `}
-                  title={`Day ${day.dayNumber}: ${day.date}`}
+                  title={`Day ${day.dayNumber}: ${day.dayOfWeek}, ${day.month} ${day.monthDay}, 2025`}
                 >
-                  {day.dayNumber}
+                  <div className="text-[10px] opacity-80 mb-1">
+                    {day.dayOfWeek}
+                  </div>
+                  <div className="text-lg font-bold">{day.monthDay}</div>
+                  <div className="text-[10px] opacity-80">{day.month}</div>
+                  <div className="absolute top-1 right-1 text-[9px] opacity-60">
+                    {day.dayNumber}
+                  </div>
+                  {day.hasCommits && (
+                    <div className="absolute bottom-1 left-1 w-2 h-2 bg-white/80 rounded-full"></div>
+                  )}
                 </div>
               ))}
             </div>
-            <div className="flex items-center justify-center space-x-6 mt-4 text-sm text-white/80">
+            <div className="flex items-center justify-center space-x-8 mt-6 text-sm text-white/80">
               <div className="flex items-center">
-                <div className="w-3 h-3 bg-white/20 rounded mr-2"></div>
-                No commits
+                <div className="w-4 h-4 bg-white/20 rounded-lg mr-2 border border-white/30"></div>
+                <span>No commits</span>
               </div>
               <div className="flex items-center">
-                <div className="w-3 h-3 bg-green-400 rounded mr-2"></div>
-                Commits made
+                <div className="w-4 h-4 bg-gradient-to-br from-green-400 to-green-500 rounded-lg mr-2 border border-green-300"></div>
+                <span>Commits made</span>
               </div>
               <div className="flex items-center">
-                <div className="w-3 h-3 bg-yellow-400 rounded mr-2"></div>
-                Today
+                <div className="w-4 h-4 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-lg mr-2 border border-yellow-300"></div>
+                <span>Today</span>
               </div>
             </div>
           </CardContent>
