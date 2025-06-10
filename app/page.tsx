@@ -61,8 +61,13 @@ export default function GitHubStreakTracker() {
       const activityData = await activityResponse.json();
       setCommitData(activityData);
 
-      // Calculate streak and today's commits
-      const today = new Date().toISOString().split("T")[0];
+      // Calculate streak and today's commits (using local timezone to match API)
+      const today = new Date();
+      const localToday = new Date(
+        today.getTime() - today.getTimezoneOffset() * 60000
+      );
+      const todayString = localToday.toISOString().split("T")[0];
+
       const startDate = new Date(2025, 5, 10); // June 10th, 2025
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + 99); // 100 days total (0-99)
@@ -74,9 +79,17 @@ export default function GitHubStreakTracker() {
 
       // Find today's activity only if we're in the challenge period
       const todayActivity = isInChallengePeriod
-        ? activityData.find((day: CommitActivity) => day.date === today)
+        ? activityData.find((day: CommitActivity) => day.date === todayString)
         : null;
       setTodayCommits(todayActivity?.count || 0);
+
+      if (process.env.NODE_ENV === "development") {
+        console.log(
+          `Frontend: Looking for activity on ${todayString}, found: ${
+            todayActivity?.count || 0
+          }`
+        );
+      }
 
       // Calculate current streak - consecutive days with commits ending on the most recent commit day
       let streak = 0;
@@ -155,12 +168,19 @@ export default function GitHubStreakTracker() {
     for (let i = 0; i < 100; i++) {
       const date = new Date(startDate);
       date.setDate(date.getDate() + i);
-      const dateString = date.toISOString().split("T")[0];
+      // Use local timezone for date string to match API
+      const localDate = new Date(
+        date.getTime() - date.getTimezoneOffset() * 60000
+      );
+      const dateString = localDate.toISOString().split("T")[0];
       const activity = commitData.find((day) => day.date === dateString);
       const hasCommits = !!(activity && activity.count > 0);
 
-      // Check if this date is today
-      const todayString = today.toISOString().split("T")[0];
+      // Check if this date is today (using local timezone)
+      const localToday = new Date(
+        today.getTime() - today.getTimezoneOffset() * 60000
+      );
+      const todayString = localToday.toISOString().split("T")[0];
       const isToday = dateString === todayString;
 
       days.push({

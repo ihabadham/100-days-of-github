@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Get user info first
+    // Get user info first to get the username
     const userData = await fetchWithToken("https://api.github.com/user", token);
     const username = userData.login;
 
@@ -20,112 +20,200 @@ export async function GET(request: NextRequest) {
       throw new Error("Could not determine GitHub username");
     }
 
-    // Get all repositories for the user with pagination
-    let allRepos: any[] = [];
-    let page = 1;
-    const perPage = 100;
+    console.log(`Fetching events for user: ${username}`);
 
-    while (true) {
-      const reposData = await fetchWithToken(
-        `https://api.github.com/users/${username}/repos?per_page=${perPage}&page=${page}&sort=updated&type=all`,
-        token
-      );
-
-      if (!reposData || reposData.length === 0) break;
-      allRepos = allRepos.concat(reposData);
-
-      if (reposData.length < perPage) break;
-      page++;
-    }
-
-    // Initialize activity data for 100 days starting from June 10th, 2025
+    // Initialize contribution data for 100 days starting from June 10th, 2025
     const activityData: { [key: string]: number } = {};
     const startDate = new Date(2025, 5, 10); // Month is 0-indexed, so 5 = June
 
-    // Initialize all days with 0 commits
+    // Initialize all days with 0 contributions
     for (let i = 0; i < 100; i++) {
       const date = new Date(startDate);
       date.setDate(date.getDate() + i);
-      const dateString = date.toISOString().split("T")[0];
+      // Use local timezone for date string to match event processing
+      const localDate = new Date(
+        date.getTime() - date.getTimezoneOffset() * 60000
+      );
+      const dateString = localDate.toISOString().split("T")[0];
       activityData[dateString] = 0;
     }
 
-    // Fetch commits for each repository with better date range and pagination
-    const since = new Date(startDate);
-    // Add a day buffer to account for time zone differences
-    since.setDate(since.getDate() - 1);
+    // Calculate date range for filtering
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 99); // 100 days total
 
-    const until = new Date(startDate);
-    until.setDate(until.getDate() + 101); // Add extra day buffer
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `Fetching user events from ${startDate.toISOString()} to ${endDate.toISOString()}`
+      );
+    }
 
-    const sinceISOString = since.toISOString();
-    const untilISOString = until.toISOString();
+    // Fetch user events with pagination to extract GitHub contributions
+    // Using /users/{username}/events to match GitHub's contribution graph calculation
+    let page = 1;
+    const eventsPerPage = 100;
+    let allEvents: any[] = [];
 
-    console.log(
-      `Fetching commits from ${sinceISOString} to ${untilISOString} for ${allRepos.length} repositories`
-    );
-
-    for (const repo of allRepos) {
+    while (page <= 10) {
+      // Limit to 10 pages (1000 events) to avoid rate limits
       try {
-        // Get commits from this repository with pagination
-        let page = 1;
-        const commitsPerPage = 100;
-
-        while (true) {
-          const commitsData = await fetchWithToken(
-            `https://api.github.com/repos/${username}/${repo.name}/commits?since=${sinceISOString}&until=${untilISOString}&per_page=${commitsPerPage}&page=${page}`,
-            token
-          );
-
-          if (!commitsData || commitsData.length === 0) break;
-
-          // Count commits per day - check both author and committer
-          for (const commit of commitsData) {
-            // Check if the commit author or committer matches the username
-            const isAuthor =
-              commit.commit.author.email === commit.author?.email ||
-              commit.author?.login === username;
-            const isCommitter =
-              commit.commit.committer.email === commit.committer?.email ||
-              commit.committer?.login === username;
-
-            if (isAuthor || isCommitter) {
-              // Use commit author date for consistency
-              const commitDate = new Date(commit.commit.author.date);
-              const commitDateString = commitDate.toISOString().split("T")[0];
-
-              // Also check the date in local time to handle timezone issues
-              const localDateString = new Date(
-                commitDate.getTime() - commitDate.getTimezoneOffset() * 60000
-              )
-                .toISOString()
-                .split("T")[0];
-
-              // Increment for both UTC and local date to handle timezone edge cases
-              if (activityData.hasOwnProperty(commitDateString)) {
-                activityData[commitDateString]++;
-              }
-              if (
-                commitDateString !== localDateString &&
-                activityData.hasOwnProperty(localDateString)
-              ) {
-                activityData[localDateString]++;
-              }
-            }
-          }
-
-          if (commitsData.length < commitsPerPage) break;
-          page++;
-        }
-      } catch (repoError) {
-        // If we can't access a repo (e.g., it's private and we don't have access), skip it
-        console.warn(
-          `Could not fetch commits for repo ${repo.name}:`,
-          repoError
+        const eventsData = await fetchWithToken(
+          `https://api.github.com/users/${username}/events?per_page=${eventsPerPage}&page=${page}`,
+          token
         );
-        continue;
+
+        if (!eventsData || eventsData.length === 0) break;
+
+        // Filter events within our date range
+        const filteredEvents = eventsData.filter((event: any) => {
+          const eventDate = new Date(event.created_at);
+          return eventDate >= startDate && eventDate <= endDate;
+        });
+
+        allEvents = allEvents.concat(filteredEvents);
+
+        // If we get events older than our start date, we can stop
+        const oldestEventDate = new Date(
+          eventsData[eventsData.length - 1].created_at
+        );
+        if (oldestEventDate < startDate) {
+          break;
+        }
+
+        if (eventsData.length < eventsPerPage) break;
+        page++;
+      } catch (error) {
+        console.warn(`Failed to fetch events page ${page}:`, error);
+        break;
       }
     }
+
+    console.log(`Fetched ${allEvents.length} events in date range`);
+
+    // Process events and count contributions per day (matching GitHub's contribution graph)
+    for (const event of allEvents) {
+      const eventDate = new Date(event.created_at);
+      // Convert to user's local timezone for date extraction
+      const localEventDate = new Date(
+        eventDate.getTime() - eventDate.getTimezoneOffset() * 60000
+      );
+      const eventDateString = localEventDate.toISOString().split("T")[0];
+
+      const today = new Date();
+      const localToday = new Date(
+        today.getTime() - today.getTimezoneOffset() * 60000
+      );
+      const todayString = localToday.toISOString().split("T")[0];
+
+      // Count contributions exactly like GitHub's profile page
+      if (activityData.hasOwnProperty(eventDateString)) {
+        switch (event.type) {
+          case "PushEvent":
+            // Count commits to any branch (not just main/master)
+            const commitCount = event.payload?.commits?.length || 1;
+            activityData[eventDateString] += commitCount;
+
+            // Debug logging for today's activity (development only)
+            if (
+              process.env.NODE_ENV === "development" &&
+              eventDateString === todayString
+            ) {
+              console.log(`🚀 PushEvent on ${eventDateString} (local time):`);
+              console.log(`  - Original UTC time: ${event.created_at}`);
+              console.log(`  - Local time: ${localEventDate.toISOString()}`);
+              console.log(`  - Repo: ${event.repo?.name}`);
+              console.log(`  - Branch: ${event.payload?.ref}`);
+              console.log(`  - Commits in this push: ${commitCount}`);
+              console.log(
+                `  - Commit details:`,
+                event.payload?.commits?.map((c: any) => ({
+                  sha: c.sha?.substring(0, 7),
+                  message: c.message?.substring(0, 50) + "...",
+                }))
+              );
+              console.log(
+                `  - Running total for today: ${activityData[eventDateString]}`
+              );
+            }
+            break;
+          case "IssuesEvent":
+            // Only count when opening issues (not comments/closes)
+            if (event.payload?.action === "opened") {
+              activityData[eventDateString] += 1;
+              if (
+                process.env.NODE_ENV === "development" &&
+                eventDateString === todayString
+              ) {
+                console.log(
+                  `📝 Issue opened on ${eventDateString}: ${event.payload?.issue?.title}`
+                );
+              }
+            }
+            break;
+          case "PullRequestEvent":
+            // Only count when opening PRs (not comments/closes)
+            if (event.payload?.action === "opened") {
+              activityData[eventDateString] += 1;
+              if (
+                process.env.NODE_ENV === "development" &&
+                eventDateString === todayString
+              ) {
+                console.log(
+                  `🔀 PR opened on ${eventDateString}: ${event.payload?.pull_request?.title}`
+                );
+              }
+            }
+            break;
+          case "PullRequestReviewEvent":
+            // Count PR reviews submitted
+            if (event.payload?.action === "submitted") {
+              activityData[eventDateString] += 1;
+              if (
+                process.env.NODE_ENV === "development" &&
+                eventDateString === todayString
+              ) {
+                console.log(`👀 PR review submitted on ${eventDateString}`);
+              }
+            }
+            break;
+          // GitHub doesn't count other activities as "contributions"
+          default:
+            if (
+              process.env.NODE_ENV === "development" &&
+              eventDateString === todayString
+            ) {
+              console.log(
+                `ℹ️ Ignored event type on ${eventDateString}: ${event.type}`
+              );
+            }
+            break;
+        }
+      }
+    }
+
+    if (process.env.NODE_ENV === "development") {
+      console.log(
+        `📊 Final count for today (${
+          new Date().toISOString().split("T")[0]
+        } UTC / ${
+          new Date(
+            new Date().getTime() - new Date().getTimezoneOffset() * 60000
+          )
+            .toISOString()
+            .split("T")[0]
+        } local): ${
+          activityData[
+            new Date(
+              new Date().getTime() - new Date().getTimezoneOffset() * 60000
+            )
+              .toISOString()
+              .split("T")[0]
+          ] || 0
+        } contributions`
+      );
+    }
+
+    // No need to round since contributions are whole numbers
 
     // Convert to array format
     const result = Object.entries(activityData).map(([date, count]) => ({
@@ -134,7 +222,7 @@ export async function GET(request: NextRequest) {
     }));
 
     console.log(
-      `Processed ${allRepos.length} repositories, found commits on ${
+      `Processed ${allEvents.length} events, found activity on ${
         result.filter((r) => r.count > 0).length
       } days`
     );
