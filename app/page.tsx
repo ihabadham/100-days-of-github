@@ -6,7 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Calendar, GitCommit, Github, Star, Trophy, Zap } from "lucide-react";
+import {
+  Calendar,
+  GitCommit,
+  Github,
+  Star,
+  Trophy,
+  Zap,
+  Loader2,
+} from "lucide-react";
 
 interface GitHubUser {
   login: string;
@@ -218,6 +226,82 @@ export default function GitHubStreakTracker() {
 
   const progressPercentage = (completedDays / 100) * 100;
 
+  // Loading Screen Component
+  const LoadingScreen = () => (
+    <div className="min-h-screen bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 p-4">
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Header Skeleton */}
+        <Card className="bg-white/10 backdrop-blur-md border-white/20">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="w-16 h-16 bg-white/20 rounded-full animate-pulse"></div>
+                <div className="space-y-2">
+                  <div className="h-6 bg-white/20 rounded-lg w-48 animate-pulse"></div>
+                  <div className="h-4 bg-white/20 rounded-lg w-32 animate-pulse"></div>
+                  <div className="flex space-x-2 mt-2">
+                    <div className="h-5 bg-white/20 rounded-full w-20 animate-pulse"></div>
+                    <div className="h-5 bg-white/20 rounded-full w-24 animate-pulse"></div>
+                  </div>
+                </div>
+              </div>
+              <div className="text-right space-y-2">
+                <div className="h-8 bg-white/20 rounded-lg w-16 animate-pulse"></div>
+                <div className="h-4 bg-white/20 rounded-lg w-20 animate-pulse"></div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Progress Cards Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <Card
+              key={i}
+              className="bg-white/10 backdrop-blur-md border-white/20"
+            >
+              <CardHeader className="pb-2">
+                <div className="h-5 bg-white/20 rounded-lg w-32 animate-pulse"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 bg-white/20 rounded-lg w-20 animate-pulse mb-2"></div>
+                <div className="h-2 bg-white/20 rounded-full w-full animate-pulse"></div>
+                <div className="h-4 bg-white/20 rounded-lg w-36 animate-pulse mt-2"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Calendar Skeleton */}
+        <Card className="bg-white/10 backdrop-blur-md border-white/20">
+          <CardHeader>
+            <div className="h-6 bg-white/20 rounded-lg w-80 animate-pulse"></div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-7 gap-3">
+              {Array.from({ length: 35 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="bg-white/10 rounded-xl min-h-[80px] animate-pulse"
+                ></div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Loading Indicator */}
+        <div className="flex items-center justify-center py-8">
+          <div className="flex items-center space-x-3 text-white">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <span className="text-lg font-medium">
+              Loading your GitHub data...
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   if (!user) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 flex items-center justify-center p-4">
@@ -246,6 +330,11 @@ export default function GitHubStreakTracker() {
         </Card>
       </div>
     );
+  }
+
+  // Show loading screen while fetching data
+  if (loading || commitData.length === 0) {
+    return <LoadingScreen />;
   }
 
   const calendarDays = generateCalendarDays();
