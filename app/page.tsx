@@ -13,6 +13,8 @@ interface GitHubUser {
   name: string;
   avatar_url: string;
   public_repos: number;
+  total_private_repos?: number;
+  total_repos?: number;
   followers: number;
   following: number;
 }
@@ -274,7 +276,10 @@ export default function GitHubStreakTracker() {
                       className="bg-white/20 text-white"
                     >
                       <Star className="w-3 h-3 mr-1" />
-                      {user.public_repos} repos
+                      {user.total_repos ||
+                        user.public_repos +
+                          (user.total_private_repos || 0)}{" "}
+                      repos
                     </Badge>
                     <Badge
                       variant="secondary"
