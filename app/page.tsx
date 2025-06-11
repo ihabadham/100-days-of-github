@@ -32,6 +32,7 @@ interface CalendarDay {
   dayOfWeek: string;
   monthDay: number;
   month: string;
+  commitCount: number;
 }
 
 export default function GitHubStreakTracker() {
@@ -193,6 +194,7 @@ export default function GitHubStreakTracker() {
         dayOfWeek: dayNames[date.getDay()],
         monthDay: date.getDate(),
         month: monthNames[date.getMonth()],
+        commitCount: activity?.count || 0,
       });
     }
 
@@ -380,7 +382,7 @@ export default function GitHubStreakTracker() {
                 <div
                   key={day.date}
                   className={`
-                    relative rounded-xl p-3 flex flex-col items-center justify-center text-xs font-medium min-h-[80px] transition-all duration-300 hover:scale-105 border-2
+                    relative rounded-xl p-3 flex flex-col items-center justify-center text-xs font-medium min-h-[80px] transition-all duration-300 hover:scale-105 border-2 group
                     ${
                       day.isToday
                         ? "bg-gradient-to-br from-yellow-400 to-yellow-500 text-black border-yellow-300 shadow-lg shadow-yellow-400/50"
@@ -389,8 +391,23 @@ export default function GitHubStreakTracker() {
                         : "bg-white/10 text-white/70 border-white/20 hover:bg-white/20"
                     }
                   `}
-                  title={`Day ${day.dayNumber}: ${day.dayOfWeek}, ${day.month} ${day.monthDay}, 2025`}
                 >
+                  {/* Styled Tooltip */}
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 whitespace-nowrap">
+                    <div className="font-semibold">
+                      {day.dayOfWeek}, {day.month} {day.monthDay}
+                    </div>
+                    <div className="text-xs mt-1">
+                      {day.commitCount === 0
+                        ? "No contributions"
+                        : `${day.commitCount} contribution${
+                            day.commitCount !== 1 ? "s" : ""
+                          }`}
+                    </div>
+                    {/* Tooltip arrow */}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-900"></div>
+                  </div>
+
                   <div className="text-[10px] opacity-80 mb-1">
                     {day.dayOfWeek}
                   </div>
