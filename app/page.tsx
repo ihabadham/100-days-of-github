@@ -343,11 +343,16 @@ export default function GitHubStreakTracker() {
     <div className="min-h-screen bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 p-4">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <Card className="bg-white/10 backdrop-blur-md border-white/20">
+        <Card
+          className="bg-white/10 backdrop-blur-md border-white/20 transition-all duration-300 hover:bg-white/15 hover:scale-[1.02] hover:shadow-2xl cursor-pointer group"
+          onClick={() =>
+            window.open(`https://github.com/${user.login}`, "_blank")
+          }
+        >
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
-                <Avatar className="w-16 h-16 border-4 border-white/30">
+                <Avatar className="w-16 h-16 border-4 border-white/30 transition-all duration-300 group-hover:border-white/50 group-hover:scale-110">
                   <AvatarImage
                     src={user.avatar_url || "/placeholder.svg"}
                     alt={user.name}
@@ -356,15 +361,20 @@ export default function GitHubStreakTracker() {
                     {user.name?.charAt(0) || user.login.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
-                <div>
-                  <h1 className="text-2xl font-bold text-white">
-                    {user.name || user.login}
-                  </h1>
-                  <p className="text-white/80">@{user.login}</p>
+                <div className="group-hover:translate-x-1 transition-transform duration-300">
+                  <div className="flex items-center space-x-2">
+                    <h1 className="text-2xl font-bold text-white">
+                      {user.name || user.login}
+                    </h1>
+                    <Github className="w-5 h-5 text-white/70 group-hover:text-white transition-colors duration-300" />
+                  </div>
+                  <p className="text-white/80 group-hover:text-white transition-colors duration-300">
+                    @{user.login}
+                  </p>
                   <div className="flex items-center space-x-4 mt-2">
                     <Badge
                       variant="secondary"
-                      className="bg-white/20 text-white"
+                      className="bg-white/20 text-white group-hover:bg-white/30 transition-colors duration-300"
                     >
                       <Star className="w-3 h-3 mr-1" />
                       {user.total_repos ||
@@ -374,18 +384,23 @@ export default function GitHubStreakTracker() {
                     </Badge>
                     <Badge
                       variant="secondary"
-                      className="bg-white/20 text-white"
+                      className="bg-white/20 text-white group-hover:bg-white/30 transition-colors duration-300"
                     >
                       {user.followers} followers
                     </Badge>
                   </div>
                 </div>
               </div>
-              <div className="text-right">
+              <div className="text-right group-hover:translate-x-1 transition-transform duration-300">
                 <div className="text-3xl font-bold text-white">
                   {currentStreak}
                 </div>
-                <div className="text-white/80">day streak</div>
+                <div className="text-white/80 group-hover:text-white transition-colors duration-300">
+                  day streak
+                </div>
+                <div className="text-xs text-white/60 group-hover:text-white/80 transition-colors duration-300 mt-1">
+                  Click to view profile
+                </div>
               </div>
             </div>
           </CardContent>
