@@ -418,9 +418,6 @@ export default function GitHubStreakTracker() {
             <CardContent>
               <div className="text-3xl font-bold mb-2">{completedDays}/100</div>
               <Progress value={progressPercentage} className="bg-white/20" />
-              <p className="text-sm mt-2 text-white/90">
-                {progressPercentage.toFixed(1)}% complete
-              </p>
             </CardContent>
           </Card>
 
