@@ -52,13 +52,13 @@ export default function GitHubStreakTracker() {
   const [todayCommits, setTodayCommits] = useState(0);
   const [scrollY, setScrollY] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [startDate, setStartDate] = useState(new Date(2025, 5, 10)); // Default to June 10, 2025
 
-  // Scroll effect handler
   useEffect(() => {
     const handleScroll = () => {
       const currentScrollY = window.scrollY;
       setScrollY(currentScrollY);
-      setIsScrolled(currentScrollY > 100); // Trigger effect after 100px scroll
+      setIsScrolled(currentScrollY > 100);
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -68,7 +68,6 @@ export default function GitHubStreakTracker() {
   const handleGitHubLogin = async () => {
     setLoading(true);
     try {
-      // Redirect to the GitHub OAuth route
       window.location.href = "/api/auth/github";
     } catch (error) {
       console.error("Failed to initiate GitHub login:", error);
@@ -87,55 +86,47 @@ export default function GitHubStreakTracker() {
       const activityData = await activityResponse.json();
       setCommitData(activityData);
 
-      // Calculate streak and today's commits (using local timezone to match API)
       const today = new Date();
-      const localToday = new Date(
-        today.getTime() - today.getTimezoneOffset() * 60000
-      );
+      const localToday = new Date(today.getTime() - today.getTimezoneOffset() * 60000);
       const todayString = localToday.toISOString().split("T")[0];
 
-      const startDate = new Date(2025, 5, 10); // June 10th, 2025
       const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 99); // 100 days total (0-99)
+      endDate.setDate(endDate.getDate() + 99);
 
-      // Check if today falls within our challenge period
-      const todayDate = new Date();
-      const isInChallengePeriod =
-        todayDate >= startDate && todayDate <= endDate;
+      const isInChallengePeriod = localToday >= startDate && localToday <= endDate;
 
-      // Find today's activity only if we're in the challenge period
       const todayActivity = isInChallengePeriod
         ? activityData.find((day: CommitActivity) => day.date === todayString)
         : null;
       setTodayCommits(todayActivity?.count || 0);
 
       if (process.env.NODE_ENV === "development") {
-        console.log(
-          `Frontend: Looking for activity on ${todayString}, found: ${
-            todayActivity?.count || 0
-          }`
-        );
+        console.log(`Frontend: Looking for activity on ${todayString}, found: ${todayActivity?.count || 0}`);
       }
 
-      // Calculate current streak - consecutive days with commits ending on the most recent commit day
+      // Calculate streak only for commits on or after startDate
       let streak = 0;
-      const sortedData = activityData.sort(
-        (a: CommitActivity, b: CommitActivity) =>
-          new Date(b.date).getTime() - new Date(a.date).getTime() // Sort reverse chronologically
-      );
+      const sortedData = activityData
+        .filter((day: CommitActivity) => new Date(day.date) >= startDate)
+        .sort((a: CommitActivity, b: CommitActivity) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-      // Find the most recent day with commits and count backwards
       let foundCommitDay = false;
       for (const day of sortedData) {
         if (!foundCommitDay && day.count > 0) {
           foundCommitDay = true;
-          streak = 1; // Start counting from the most recent commit day
+          streak = 1;
         } else if (foundCommitDay && day.count > 0) {
-          streak++; // Continue the streak
+          streak++;
         } else if (foundCommitDay && day.count === 0) {
-          break; // End of streak
+          break;
         }
       }
+
+      // If today is before startDate, streak should be 0
+      if (localToday < startDate) {
+        streak = 0;
+      }
+
       setCurrentStreak(streak);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -145,7 +136,6 @@ export default function GitHubStreakTracker() {
   };
 
   useEffect(() => {
-    // Check if user is already logged in by calling the auth status endpoint
     const checkAuthStatus = async () => {
       try {
         const response = await fetch("/api/auth/status");
@@ -160,52 +150,31 @@ export default function GitHubStreakTracker() {
 
     checkAuthStatus();
 
-    // Check for error parameters in URL
     const urlParams = new URLSearchParams(window.location.search);
     const error = urlParams.get("error");
     if (error) {
       console.error(`Authentication error: ${error}`);
-      // You could display an error message to the user here
     }
-  }, []);
+  }, [startDate]);
 
   const generateCalendarDays = (): CalendarDay[] => {
     const days: CalendarDay[] = [];
-    // Start from June 10th, 2025
-    const startDate = new Date(2025, 5, 10); // Month is 0-indexed, so 5 = June
     const today = new Date();
 
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const monthNames = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
+      "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
 
     for (let i = 0; i < 100; i++) {
       const date = new Date(startDate);
       date.setDate(date.getDate() + i);
-      // Use local timezone for date string to match API
-      const localDate = new Date(
-        date.getTime() - date.getTimezoneOffset() * 60000
-      );
+      const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
       const dateString = localDate.toISOString().split("T")[0];
       const activity = commitData.find((day) => day.date === dateString);
       const hasCommits = !!(activity && activity.count > 0);
 
-      // Check if this date is today (using local timezone)
-      const localToday = new Date(
-        today.getTime() - today.getTimezoneOffset() * 60000
-      );
+      const localToday = new Date(today.getTime() - today.getTimezoneOffset() * 60000);
       const todayString = localToday.toISOString().split("T")[0];
       const isToday = dateString === todayString;
 
@@ -224,36 +193,26 @@ export default function GitHubStreakTracker() {
     return days;
   };
 
-  // Calculate progress based on the 100-day challenge period
-  const challengeStartDate = new Date(2025, 5, 10); // June 10th, 2025
-  const challengeEndDate = new Date(challengeStartDate);
-  challengeEndDate.setDate(challengeEndDate.getDate() + 99); // 100 days total
+  const challengeEndDate = new Date(startDate);
+  challengeEndDate.setDate(challengeEndDate.getDate() + 99);
 
-  // Filter days that are within the challenge period and have commits
   const completedDays = commitData.filter((day) => {
     const dayDate = new Date(day.date);
-    return (
-      dayDate >= challengeStartDate &&
-      dayDate <= challengeEndDate &&
-      day.count > 0
-    );
+    return dayDate >= startDate && dayDate <= challengeEndDate && day.count > 0;
   }).length;
 
-  // Calculate total contributions in the challenge period
   const totalContributions = commitData
     .filter((day) => {
       const dayDate = new Date(day.date);
-      return dayDate >= challengeStartDate && dayDate <= challengeEndDate;
+      return dayDate >= startDate && dayDate <= challengeEndDate;
     })
     .reduce((sum, day) => sum + day.count, 0);
 
   const progressPercentage = (completedDays / 100) * 100;
 
-  // Loading Screen Component
   const LoadingScreen = () => (
     <div className="min-h-screen bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 p-4">
       <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header Skeleton */}
         <Card className="bg-white/10 backdrop-blur-md border-white/20">
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
@@ -276,13 +235,9 @@ export default function GitHubStreakTracker() {
           </CardContent>
         </Card>
 
-        {/* Progress Cards Skeleton */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[1, 2, 3].map((i) => (
-            <Card
-              key={i}
-              className="bg-white/10 backdrop-blur-md border-white/20"
-            >
+            <Card key={i} className="bg-white/10 backdrop-blur-md border-white/20">
               <CardHeader className="pb-2">
                 <div className="h-5 bg-white/20 rounded-lg w-32 animate-pulse"></div>
               </CardHeader>
@@ -295,7 +250,6 @@ export default function GitHubStreakTracker() {
           ))}
         </div>
 
-        {/* Calendar Skeleton */}
         <Card className="bg-white/10 backdrop-blur-md border-white/20">
           <CardHeader>
             <div className="h-6 bg-white/20 rounded-lg w-80 animate-pulse"></div>
@@ -303,22 +257,16 @@ export default function GitHubStreakTracker() {
           <CardContent>
             <div className="grid grid-cols-7 gap-3">
               {Array.from({ length: 35 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="bg-white/10 rounded-xl min-h-[80px] animate-pulse"
-                ></div>
+                <div key={i} className="bg-white/10 rounded-xl min-h-[80px] animate-pulse"></div>
               ))}
             </div>
           </CardContent>
         </Card>
 
-        {/* Loading Indicator */}
         <div className="flex items-center justify-center py-8">
           <div className="flex items-center space-x-3 text-white">
             <Loader2 className="w-6 h-6 animate-spin" />
-            <span className="text-lg font-medium">
-              Loading your GitHub data...
-            </span>
+            <span className="text-lg font-medium">Loading your GitHub data...</span>
           </div>
         </div>
       </div>
@@ -336,9 +284,7 @@ export default function GitHubStreakTracker() {
             <CardTitle className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
               100 Day GitHub Streak
             </CardTitle>
-            <p className="text-muted-foreground">
-              Track your coding journey and build an amazing streak!
-            </p>
+            <p className="text-muted-foreground">Track your coding journey and build an amazing streak!</p>
           </CardHeader>
           <CardContent>
             <Button
@@ -355,7 +301,6 @@ export default function GitHubStreakTracker() {
     );
   }
 
-  // Show loading screen while fetching data
   if (loading || commitData.length === 0) {
     return <LoadingScreen />;
   }
@@ -365,69 +310,54 @@ export default function GitHubStreakTracker() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-400 via-pink-500 to-red-500 p-4">
       <div className="max-w-6xl mx-auto space-y-6">
+        {/* Start Date Input */}
+        <Card className="bg-white/10 backdrop-blur-md border-white/20">
+          <CardContent className="p-4">
+            <label className="text-white mb-2 block">Set Starting Date:</label>
+            <input
+              type="date"
+              value={startDate.toISOString().split("T")[0]}
+              onChange={(e) => setStartDate(new Date(e.target.value))}
+              className="w-full p-2 rounded bg-white/20 text-white border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+          </CardContent>
+        </Card>
+
         {/* Header */}
         <Card
           className={`bg-white/10 backdrop-blur-md border-white/20 transition-all duration-500 hover:bg-white/15 hover:scale-[1.02] hover:shadow-2xl cursor-pointer group ${
-            isScrolled
-              ? "opacity-0 -translate-y-8 pointer-events-none"
-              : "opacity-100 translate-y-0"
+            isScrolled ? "opacity-0 -translate-y-8 pointer-events-none" : "opacity-100 translate-y-0"
           }`}
-          onClick={() =>
-            window.open(`https://github.com/${user.login}`, "_blank")
-          }
+          onClick={() => window.open(`https://github.com/${user.login}`, "_blank")}
         >
           <CardContent className="p-4 md:p-6">
             <div className="flex flex-col md:flex-row items-center md:justify-between space-y-4 md:space-y-0">
               <div className="flex flex-col md:flex-row items-center space-y-3 md:space-y-0 md:space-x-4 text-center md:text-left">
                 <Avatar className="w-12 h-12 md:w-16 md:h-16 border-4 border-white/30 transition-all duration-300 group-hover:border-white/50 group-hover:scale-110">
-                  <AvatarImage
-                    src={user.avatar_url || "/placeholder.svg"}
-                    alt={user.name}
-                  />
-                  <AvatarFallback>
-                    {user.name?.charAt(0) || user.login.charAt(0)}
-                  </AvatarFallback>
+                  <AvatarImage src={user.avatar_url || "/placeholder.svg"} alt={user.name} />
+                  <AvatarFallback>{user.name?.charAt(0) || user.login.charAt(0)}</AvatarFallback>
                 </Avatar>
                 <div className="group-hover:translate-x-1 transition-transform duration-300">
                   <div className="flex items-center justify-center md:justify-start space-x-2">
-                    <h1 className="text-xl md:text-2xl font-bold text-white">
-                      {user.name || user.login}
-                    </h1>
+                    <h1 className="text-xl md:text-2xl font-bold text-white">{user.name || user.login}</h1>
                     <Github className="w-4 h-4 md:w-5 md:h-5 text-white/70 group-hover:text-white transition-colors duration-300" />
                   </div>
-                  <p className="text-white/80 group-hover:text-white transition-colors duration-300 text-sm md:text-base">
-                    @{user.login}
-                  </p>
+                  <p className="text-white/80 group-hover:text-white transition-colors duration-300 text-sm md:text-base">@{user.login}</p>
                   <div className="flex items-center justify-center md:justify-start flex-wrap gap-2 mt-2">
-                    <Badge
-                      variant="secondary"
-                      className="bg-white/20 text-white group-hover:bg-white/30 transition-colors duration-300 text-xs"
-                    >
+                    <Badge variant="secondary" className="bg-white/20 text-white group-hover:bg-white/30 transition-colors duration-300 text-xs">
                       <Star className="w-3 h-3 mr-1" />
-                      {user.total_repos ||
-                        user.public_repos +
-                          (user.total_private_repos || 0)}{" "}
-                      repos
+                      {user.total_repos || user.public_repos + (user.total_private_repos || 0)} repos
                     </Badge>
-                    <Badge
-                      variant="secondary"
-                      className="bg-white/20 text-white group-hover:bg-white/30 transition-colors duration-300 text-xs"
-                    >
+                    <Badge variant="secondary" className="bg-white/20 text-white group-hover:bg-white/30 transition-colors duration-300 text-xs">
                       {user.followers} followers
                     </Badge>
                   </div>
                 </div>
               </div>
               <div className="text-center md:text-right group-hover:translate-x-1 transition-transform duration-300">
-                <div className="text-2xl md:text-3xl font-bold text-white">
-                  {currentStreak}
-                </div>
-                <div className="text-white/80 group-hover:text-white transition-colors duration-300 text-sm md:text-base">
-                  day streak
-                </div>
-                <div className="text-xs text-white/60 group-hover:text-white/80 transition-colors duration-300 mt-1">
-                  Click to view profile
-                </div>
+                <div className="text-2xl md:text-3xl font-bold text-white">{currentStreak}</div>
+                <div className="text-white/80 group-hover:text-white transition-colors duration-300 text-sm md:text-base">day streak</div>
+                <div className="text-xs text-white/60 group-hover:text-white/80 transition-colors duration-300 mt-1">Click to view profile</div>
               </div>
             </div>
           </CardContent>
@@ -441,15 +371,10 @@ export default function GitHubStreakTracker() {
               : "relative"
           }`}
         >
-          <Card
-            className={`bg-gradient-to-r from-green-400 to-blue-500 text-white transition-all duration-300 ${
-              isScrolled ? "hover:scale-105" : ""
-            }`}
-          >
+          <Card className={`bg-gradient-to-r from-green-400 to-blue-500 text-white transition-all duration-300 ${isScrolled ? "hover:scale-105" : ""}`}>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center text-lg">
-                <Trophy className="w-5 h-5 mr-2" />
-                Progress
+                <Trophy className="w-5 h-5 mr-2" />Progress
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -458,38 +383,24 @@ export default function GitHubStreakTracker() {
             </CardContent>
           </Card>
 
-          <Card
-            className={`bg-gradient-to-r from-blue-400 to-indigo-500 text-white transition-all duration-300 ${
-              isScrolled ? "hover:scale-105" : ""
-            }`}
-          >
+          <Card className={`bg-gradient-to-r from-blue-400 to-indigo-500 text-white transition-all duration-300 ${isScrolled ? "hover:scale-105" : ""}`}>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center text-lg">
-                <TrendingUp className="w-5 h-5 mr-2" />
-                Total Contributions
+                <TrendingUp className="w-5 h-5 mr-2" />Total Contributions
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold mb-2">
-                {totalContributions.toLocaleString()}
-              </div>
+              <div className="text-3xl font-bold mb-2">{totalContributions.toLocaleString()}</div>
               <p className="text-sm text-white/90">
-                {totalContributions > 0
-                  ? "Amazing work! 🚀"
-                  : "Ready to start! 💪"}
+                {totalContributions > 0 ? "Amazing work! 🚀" : "Ready to start! 💪"}
               </p>
             </CardContent>
           </Card>
 
-          <Card
-            className={`bg-gradient-to-r from-yellow-400 to-orange-500 text-white transition-all duration-300 ${
-              isScrolled ? "hover:scale-105" : ""
-            }`}
-          >
+          <Card className={`bg-gradient-to-r from-yellow-400 to-orange-500 text-white transition-all duration-300 ${isScrolled ? "hover:scale-105" : ""}`}>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center text-lg">
-                <Zap className="w-5 h-5 mr-2" />
-                Today's Activity
+                <Zap className="w-5 h-5 mr-2" />Today's Activity
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -497,12 +408,11 @@ export default function GitHubStreakTracker() {
               <p className="text-sm text-white/90">
                 {(() => {
                   const today = new Date();
-                  const challengeStart = new Date(2025, 5, 10);
-                  const challengeEnd = new Date(challengeStart);
+                  const challengeEnd = new Date(startDate);
                   challengeEnd.setDate(challengeEnd.getDate() + 99);
 
-                  if (today < challengeStart) {
-                    return `Challenge starts ${challengeStart.toLocaleDateString()}`;
+                  if (today < startDate) {
+                    return `Challenge starts ${startDate.toLocaleDateString()}`;
                   } else if (today > challengeEnd) {
                     return "Challenge completed! 🏆";
                   } else if (todayCommits > 0) {
@@ -515,23 +425,16 @@ export default function GitHubStreakTracker() {
             </CardContent>
           </Card>
 
-          <Card
-            className={`bg-gradient-to-r from-pink-400 to-purple-500 text-white transition-all duration-300 ${
-              isScrolled ? "hover:scale-105" : ""
-            }`}
-          >
+          <Card className={`bg-gradient-to-r from-pink-400 to-purple-500 text-white transition-all duration-300 ${isScrolled ? "hover:scale-105" : ""}`}>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center text-lg">
-                <GitCommit className="w-5 h-5 mr-2" />
-                Current Streak
+                <GitCommit className="w-5 h-5 mr-2" />Current Streak
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-3xl font-bold mb-2">{currentStreak}</div>
               <p className="text-sm text-white/90">
-                {currentStreak > 0
-                  ? "Keep it up! 🔥"
-                  : "Start your streak today!"}
+                {currentStreak > 0 ? "Keep it up! 🔥" : "Start your streak today!"}
               </p>
             </CardContent>
           </Card>
@@ -542,7 +445,7 @@ export default function GitHubStreakTracker() {
           <CardHeader>
             <CardTitle className="flex items-center text-white">
               <Calendar className="w-5 h-5 mr-2" />
-              100 Day Challenge Calendar (Starting June 10, 2025)
+              100 Day Challenge Calendar (Starting {startDate.toLocaleDateString()})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -561,31 +464,19 @@ export default function GitHubStreakTracker() {
                     }
                   `}
                 >
-                  {/* Styled Tooltip */}
                   <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10 whitespace-nowrap">
-                    <div className="font-semibold">
-                      {day.dayOfWeek}, {day.month} {day.monthDay}
-                    </div>
+                    <div className="font-semibold">{day.dayOfWeek}, {day.month} {day.monthDay}</div>
                     <div className="text-xs mt-1">
                       {day.commitCount === 0
                         ? "No contributions"
-                        : `${day.commitCount} contribution${
-                            day.commitCount !== 1 ? "s" : ""
-                          }`}
+                        : `${day.commitCount} contribution${day.commitCount !== 1 ? "s" : ""}`}
                     </div>
-                    {/* Tooltip arrow */}
                     <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-900"></div>
                   </div>
 
-                  <div className="text-[8px] md:text-[10px] opacity-80 mb-1">
-                    {day.dayOfWeek}
-                  </div>
-                  <div className="text-sm md:text-lg font-bold">
-                    {day.monthDay}
-                  </div>
-                  <div className="text-[8px] md:text-[10px] opacity-80">
-                    {day.month}
-                  </div>
+                  <div className="text-[8px] md:text-[10px] opacity-80 mb-1">{day.dayOfWeek}</div>
+                  <div className="text-sm md:text-lg font-bold">{day.monthDay}</div>
+                  <div className="text-[8px] md:text-[10px] opacity-80">{day.month}</div>
                   <div className="absolute top-0.5 md:top-1 right-0.5 md:right-1 text-[7px] md:text-[9px] opacity-60">
                     {day.dayNumber}
                   </div>
