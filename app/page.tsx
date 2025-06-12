@@ -14,6 +14,7 @@ import {
   Trophy,
   Zap,
   Loader2,
+  TrendingUp,
 } from "lucide-react";
 
 interface GitHubUser {
@@ -49,6 +50,20 @@ export default function GitHubStreakTracker() {
   const [loading, setLoading] = useState(false);
   const [currentStreak, setCurrentStreak] = useState(0);
   const [todayCommits, setTodayCommits] = useState(0);
+  const [scrollY, setScrollY] = useState(0);
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  // Scroll effect handler
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      setScrollY(currentScrollY);
+      setIsScrolled(currentScrollY > 100); // Trigger effect after 100px scroll
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const handleGitHubLogin = async () => {
     setLoading(true);
@@ -224,6 +239,14 @@ export default function GitHubStreakTracker() {
     );
   }).length;
 
+  // Calculate total contributions in the challenge period
+  const totalContributions = commitData
+    .filter((day) => {
+      const dayDate = new Date(day.date);
+      return dayDate >= challengeStartDate && dayDate <= challengeEndDate;
+    })
+    .reduce((sum, day) => sum + day.count, 0);
+
   const progressPercentage = (completedDays / 100) * 100;
 
   // Loading Screen Component
@@ -344,7 +367,11 @@ export default function GitHubStreakTracker() {
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
         <Card
-          className="bg-white/10 backdrop-blur-md border-white/20 transition-all duration-300 hover:bg-white/15 hover:scale-[1.02] hover:shadow-2xl cursor-pointer group"
+          className={`bg-white/10 backdrop-blur-md border-white/20 transition-all duration-500 hover:bg-white/15 hover:scale-[1.02] hover:shadow-2xl cursor-pointer group ${
+            isScrolled
+              ? "opacity-0 -translate-y-8 pointer-events-none"
+              : "opacity-100 translate-y-0"
+          }`}
           onClick={() =>
             window.open(`https://github.com/${user.login}`, "_blank")
           }
@@ -407,8 +434,18 @@ export default function GitHubStreakTracker() {
         </Card>
 
         {/* Progress Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="bg-gradient-to-r from-green-400 to-blue-500 text-white">
+        <div
+          className={`grid grid-cols-1 md:grid-cols-4 gap-6 transition-all duration-500 ${
+            isScrolled
+              ? "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-6xl w-full px-4 scale-95 shadow-2xl"
+              : "relative"
+          }`}
+        >
+          <Card
+            className={`bg-gradient-to-r from-green-400 to-blue-500 text-white transition-all duration-300 ${
+              isScrolled ? "hover:scale-105" : ""
+            }`}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center text-lg">
                 <Trophy className="w-5 h-5 mr-2" />
@@ -421,7 +458,34 @@ export default function GitHubStreakTracker() {
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white">
+          <Card
+            className={`bg-gradient-to-r from-blue-400 to-indigo-500 text-white transition-all duration-300 ${
+              isScrolled ? "hover:scale-105" : ""
+            }`}
+          >
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center text-lg">
+                <TrendingUp className="w-5 h-5 mr-2" />
+                Total Contributions
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold mb-2">
+                {totalContributions.toLocaleString()}
+              </div>
+              <p className="text-sm text-white/90">
+                {totalContributions > 0
+                  ? "Amazing work! 🚀"
+                  : "Ready to start! 💪"}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card
+            className={`bg-gradient-to-r from-yellow-400 to-orange-500 text-white transition-all duration-300 ${
+              isScrolled ? "hover:scale-105" : ""
+            }`}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center text-lg">
                 <Zap className="w-5 h-5 mr-2" />
@@ -451,7 +515,11 @@ export default function GitHubStreakTracker() {
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-r from-pink-400 to-purple-500 text-white">
+          <Card
+            className={`bg-gradient-to-r from-pink-400 to-purple-500 text-white transition-all duration-300 ${
+              isScrolled ? "hover:scale-105" : ""
+            }`}
+          >
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center text-lg">
                 <GitCommit className="w-5 h-5 mr-2" />
