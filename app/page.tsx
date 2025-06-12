@@ -376,10 +376,10 @@ export default function GitHubStreakTracker() {
             window.open(`https://github.com/${user.login}`, "_blank")
           }
         >
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <Avatar className="w-16 h-16 border-4 border-white/30 transition-all duration-300 group-hover:border-white/50 group-hover:scale-110">
+          <CardContent className="p-4 md:p-6">
+            <div className="flex flex-col md:flex-row items-center md:justify-between space-y-4 md:space-y-0">
+              <div className="flex flex-col md:flex-row items-center space-y-3 md:space-y-0 md:space-x-4 text-center md:text-left">
+                <Avatar className="w-12 h-12 md:w-16 md:h-16 border-4 border-white/30 transition-all duration-300 group-hover:border-white/50 group-hover:scale-110">
                   <AvatarImage
                     src={user.avatar_url || "/placeholder.svg"}
                     alt={user.name}
@@ -389,19 +389,19 @@ export default function GitHubStreakTracker() {
                   </AvatarFallback>
                 </Avatar>
                 <div className="group-hover:translate-x-1 transition-transform duration-300">
-                  <div className="flex items-center space-x-2">
-                    <h1 className="text-2xl font-bold text-white">
+                  <div className="flex items-center justify-center md:justify-start space-x-2">
+                    <h1 className="text-xl md:text-2xl font-bold text-white">
                       {user.name || user.login}
                     </h1>
-                    <Github className="w-5 h-5 text-white/70 group-hover:text-white transition-colors duration-300" />
+                    <Github className="w-4 h-4 md:w-5 md:h-5 text-white/70 group-hover:text-white transition-colors duration-300" />
                   </div>
-                  <p className="text-white/80 group-hover:text-white transition-colors duration-300">
+                  <p className="text-white/80 group-hover:text-white transition-colors duration-300 text-sm md:text-base">
                     @{user.login}
                   </p>
-                  <div className="flex items-center space-x-4 mt-2">
+                  <div className="flex items-center justify-center md:justify-start flex-wrap gap-2 mt-2">
                     <Badge
                       variant="secondary"
-                      className="bg-white/20 text-white group-hover:bg-white/30 transition-colors duration-300"
+                      className="bg-white/20 text-white group-hover:bg-white/30 transition-colors duration-300 text-xs"
                     >
                       <Star className="w-3 h-3 mr-1" />
                       {user.total_repos ||
@@ -411,18 +411,18 @@ export default function GitHubStreakTracker() {
                     </Badge>
                     <Badge
                       variant="secondary"
-                      className="bg-white/20 text-white group-hover:bg-white/30 transition-colors duration-300"
+                      className="bg-white/20 text-white group-hover:bg-white/30 transition-colors duration-300 text-xs"
                     >
                       {user.followers} followers
                     </Badge>
                   </div>
                 </div>
               </div>
-              <div className="text-right group-hover:translate-x-1 transition-transform duration-300">
-                <div className="text-3xl font-bold text-white">
+              <div className="text-center md:text-right group-hover:translate-x-1 transition-transform duration-300">
+                <div className="text-2xl md:text-3xl font-bold text-white">
                   {currentStreak}
                 </div>
-                <div className="text-white/80 group-hover:text-white transition-colors duration-300">
+                <div className="text-white/80 group-hover:text-white transition-colors duration-300 text-sm md:text-base">
                   day streak
                 </div>
                 <div className="text-xs text-white/60 group-hover:text-white/80 transition-colors duration-300 mt-1">
@@ -437,7 +437,7 @@ export default function GitHubStreakTracker() {
         <div
           className={`grid grid-cols-1 md:grid-cols-4 gap-6 transition-all duration-500 ${
             isScrolled
-              ? "fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-6xl w-full px-4 scale-95 shadow-2xl"
+              ? "md:fixed md:top-4 md:left-1/2 md:transform md:-translate-x-1/2 md:z-50 md:max-w-6xl md:w-full md:px-4 md:scale-95 md:shadow-2xl relative"
               : "relative"
           }`}
         >
@@ -546,12 +546,12 @@ export default function GitHubStreakTracker() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-7 gap-3">
+            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 gap-2 md:gap-3">
               {calendarDays.map((day) => (
                 <div
                   key={day.date}
                   className={`
-                    relative rounded-xl p-3 flex flex-col items-center justify-center text-xs font-medium min-h-[80px] transition-all duration-300 hover:scale-105 border-2 group
+                    relative rounded-xl p-2 md:p-3 flex flex-col items-center justify-center text-xs font-medium min-h-[60px] md:min-h-[80px] transition-all duration-300 hover:scale-105 border-2 group
                     ${
                       day.isToday
                         ? "bg-gradient-to-br from-yellow-400 to-yellow-500 text-black border-yellow-300 shadow-lg shadow-yellow-400/50"
@@ -577,12 +577,16 @@ export default function GitHubStreakTracker() {
                     <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-gray-900"></div>
                   </div>
 
-                  <div className="text-[10px] opacity-80 mb-1">
+                  <div className="text-[8px] md:text-[10px] opacity-80 mb-1">
                     {day.dayOfWeek}
                   </div>
-                  <div className="text-lg font-bold">{day.monthDay}</div>
-                  <div className="text-[10px] opacity-80">{day.month}</div>
-                  <div className="absolute top-1 right-1 text-[9px] opacity-60">
+                  <div className="text-sm md:text-lg font-bold">
+                    {day.monthDay}
+                  </div>
+                  <div className="text-[8px] md:text-[10px] opacity-80">
+                    {day.month}
+                  </div>
+                  <div className="absolute top-0.5 md:top-1 right-0.5 md:right-1 text-[7px] md:text-[9px] opacity-60">
                     {day.dayNumber}
                   </div>
                   {day.hasCommits && (
