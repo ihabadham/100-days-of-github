@@ -64,6 +64,42 @@ export default function GitHubStreakTracker() {
   ); // Default to June 10, 2025
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
+  // Load saved start date from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedStartDate = localStorage.getItem(
+        "github-challenge-start-date"
+      );
+      if (savedStartDate) {
+        const parsedDate = new Date(savedStartDate);
+        // Validate the date is reasonable (not in far future, not before 1900)
+        if (
+          parsedDate instanceof Date &&
+          !isNaN(parsedDate.getTime()) &&
+          parsedDate >= new Date(1900, 0, 1) &&
+          parsedDate <= new Date()
+        ) {
+          setChallengeStartDate(parsedDate);
+        }
+      }
+    } catch (error) {
+      console.log("Failed to load saved start date:", error);
+      // Keep default date if there's an error
+    }
+  }, []);
+
+  // Save start date to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "github-challenge-start-date",
+        challengeStartDate.toISOString()
+      );
+    } catch (error) {
+      console.log("Failed to save start date:", error);
+    }
+  }, [challengeStartDate]);
+
   // Scroll effect handler
   useEffect(() => {
     const handleScroll = () => {
