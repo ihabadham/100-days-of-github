@@ -26,11 +26,22 @@ export async function GET(request: NextRequest) {
 
     console.log(`Fetching contribution calendar for user: ${username}`);
 
-    // Initialize contribution data for 100 days starting from June 10th, 2025
-    const activityData: { [key: string]: number } = {};
-    const startDate = new Date(Date.UTC(2025, 5, 10, 0, 0, 0)); // Use explicit UTC to avoid host tz issues
+    // Get start date from URL parameters, default to June 10, 2025 if not provided
+    const url = new URL(request.url);
+    const startDateParam = url.searchParams.get("startDate");
+
+    let startDate: Date;
+    if (startDateParam) {
+      startDate = new Date(startDateParam + "T00:00:00.000Z"); // Ensure UTC
+    } else {
+      startDate = new Date(Date.UTC(2025, 5, 10, 0, 0, 0)); // Default to June 10, 2025
+    }
+
     const endDate = new Date(startDate);
     endDate.setDate(endDate.getDate() + 99); // Inclusive 100-day window
+
+    // Initialize contribution data for 100 days
+    const activityData: { [key: string]: number } = {};
 
     // Pre-fill activityData with zeroes
     for (let i = 0; i < 100; i++) {

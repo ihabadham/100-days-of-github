@@ -6,8 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Calendar } from "@/components/ui/calendar";
 import {
-  Calendar,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Calendar as CalendarIcon,
   GitCommit,
   Github,
   Star,
@@ -16,6 +22,7 @@ import {
   Loader2,
   TrendingUp,
 } from "lucide-react";
+import { format } from "date-fns";
 
 interface GitHubUser {
   login: string;
@@ -52,6 +59,10 @@ export default function GitHubStreakTracker() {
   const [todayCommits, setTodayCommits] = useState(0);
   const [scrollY, setScrollY] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [challengeStartDate, setChallengeStartDate] = useState<Date>(
+    new Date(2025, 5, 10)
+  ); // Default to June 10, 2025
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
 
   // Scroll effect handler
   useEffect(() => {
@@ -76,6 +87,59 @@ export default function GitHubStreakTracker() {
     }
   };
 
+  // Streak calculation logic
+  const calculateCurrentStreak = (
+    activityData: CommitActivity[],
+    startDate: Date
+  ): number => {
+    if (activityData.length === 0) return 0;
+
+    // Create a map for quick lookup
+    const activityMap = new Map<string, number>();
+    activityData.forEach((day) => {
+      activityMap.set(day.date, day.count);
+    });
+
+    // Get today's date in the same format as the activity data
+    const today = new Date();
+    const localToday = new Date(
+      today.getTime() - today.getTimezoneOffset() * 60000
+    );
+    const todayString = localToday.toISOString().split("T")[0];
+
+    // Calculate the challenge end date
+    const endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 99);
+
+    // Start from today and work backwards to find the current streak
+    let streak = 0;
+    let currentDate = new Date(localToday);
+
+    // Only count days within the challenge period
+    while (currentDate >= startDate && currentDate <= endDate) {
+      const dateString = currentDate.toISOString().split("T")[0];
+      const commits = activityMap.get(dateString) || 0;
+
+      if (commits > 0) {
+        streak++;
+      } else {
+        // If this is the first day we're checking (today) and it has no commits,
+        // continue checking previous days as the streak might still be active
+        if (currentDate.getTime() === localToday.getTime()) {
+          // Do nothing, continue checking previous days
+        } else {
+          // If we hit a day with no commits and it's not today, break the streak
+          break;
+        }
+      }
+
+      // Move to the previous day
+      currentDate.setDate(currentDate.getDate() - 1);
+    }
+
+    return streak;
+  };
+
   const fetchUserData = async () => {
     setLoading(true);
     try {
@@ -83,7 +147,11 @@ export default function GitHubStreakTracker() {
       const userData = await response.json();
       setUser(userData);
 
-      const activityResponse = await fetch("/api/github/activity");
+      // Pass the start date to the API
+      const startDateString = challengeStartDate.toISOString().split("T")[0];
+      const activityResponse = await fetch(
+        `/api/github/activity?startDate=${startDateString}`
+      );
       const activityData = await activityResponse.json();
       setCommitData(activityData);
 
@@ -94,14 +162,13 @@ export default function GitHubStreakTracker() {
       );
       const todayString = localToday.toISOString().split("T")[0];
 
-      const startDate = new Date(2025, 5, 10); // June 10th, 2025
-      const endDate = new Date(startDate);
+      const endDate = new Date(challengeStartDate);
       endDate.setDate(endDate.getDate() + 99); // 100 days total (0-99)
 
       // Check if today falls within our challenge period
       const todayDate = new Date();
       const isInChallengePeriod =
-        todayDate >= startDate && todayDate <= endDate;
+        todayDate >= challengeStartDate && todayDate <= endDate;
 
       // Find today's activity only if we're in the challenge period
       const todayActivity = isInChallengePeriod
@@ -117,25 +184,7 @@ export default function GitHubStreakTracker() {
         );
       }
 
-      // Calculate current streak - consecutive days with commits ending on the most recent commit day
-      let streak = 0;
-      const sortedData = activityData.sort(
-        (a: CommitActivity, b: CommitActivity) =>
-          new Date(b.date).getTime() - new Date(a.date).getTime() // Sort reverse chronologically
-      );
-
-      // Find the most recent day with commits and count backwards
-      let foundCommitDay = false;
-      for (const day of sortedData) {
-        if (!foundCommitDay && day.count > 0) {
-          foundCommitDay = true;
-          streak = 1; // Start counting from the most recent commit day
-        } else if (foundCommitDay && day.count > 0) {
-          streak++; // Continue the streak
-        } else if (foundCommitDay && day.count === 0) {
-          break; // End of streak
-        }
-      }
+      const streak = calculateCurrentStreak(activityData, challengeStartDate);
       setCurrentStreak(streak);
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -143,6 +192,13 @@ export default function GitHubStreakTracker() {
       setLoading(false);
     }
   };
+
+  // Refetch data when start date changes
+  useEffect(() => {
+    if (user) {
+      fetchUserData();
+    }
+  }, [challengeStartDate, user?.login]);
 
   useEffect(() => {
     // Check if user is already logged in by calling the auth status endpoint
@@ -171,8 +227,6 @@ export default function GitHubStreakTracker() {
 
   const generateCalendarDays = (): CalendarDay[] => {
     const days: CalendarDay[] = [];
-    // Start from June 10th, 2025
-    const startDate = new Date(2025, 5, 10); // Month is 0-indexed, so 5 = June
     const today = new Date();
 
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -192,7 +246,7 @@ export default function GitHubStreakTracker() {
     ];
 
     for (let i = 0; i < 100; i++) {
-      const date = new Date(startDate);
+      const date = new Date(challengeStartDate);
       date.setDate(date.getDate() + i);
       // Use local timezone for date string to match API
       const localDate = new Date(
@@ -225,9 +279,8 @@ export default function GitHubStreakTracker() {
   };
 
   // Calculate progress based on the 100-day challenge period
-  const challengeStartDate = new Date(2025, 5, 10); // June 10th, 2025
   const challengeEndDate = new Date(challengeStartDate);
-  challengeEndDate.setDate(challengeEndDate.getDate() + 99); // 100 days total
+  challengeEndDate.setDate(challengeEndDate.getDate() + 99);
 
   // Filter days that are within the challenge period and have commits
   const completedDays = commitData.filter((day) => {
@@ -497,12 +550,11 @@ export default function GitHubStreakTracker() {
               <p className="text-sm text-white/90">
                 {(() => {
                   const today = new Date();
-                  const challengeStart = new Date(2025, 5, 10);
-                  const challengeEnd = new Date(challengeStart);
+                  const challengeEnd = new Date(challengeStartDate);
                   challengeEnd.setDate(challengeEnd.getDate() + 99);
 
-                  if (today < challengeStart) {
-                    return `Challenge starts ${challengeStart.toLocaleDateString()}`;
+                  if (today < challengeStartDate) {
+                    return `Challenge starts ${challengeStartDate.toLocaleDateString()}`;
                   } else if (today > challengeEnd) {
                     return "Challenge completed! 🏆";
                   } else if (todayCommits > 0) {
@@ -540,10 +592,47 @@ export default function GitHubStreakTracker() {
         {/* 100 Day Calendar */}
         <Card className="bg-white/10 backdrop-blur-md border-white/20">
           <CardHeader>
-            <CardTitle className="flex items-center text-white">
-              <Calendar className="w-5 h-5 mr-2" />
-              100 Day Challenge Calendar (Starting June 10, 2025)
-            </CardTitle>
+            <div className="flex items-center justify-between text-white">
+              <CardTitle className="flex items-center">
+                <CalendarIcon className="w-5 h-5 mr-2" />
+                100 Day Challenge Calendar (Starting{" "}
+                {format(challengeStartDate, "MMMM d, yyyy")})
+              </CardTitle>
+              <Popover
+                open={isDatePickerOpen}
+                onOpenChange={setIsDatePickerOpen}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="bg-white/10 border-white/20 text-white hover:bg-white/20 hover:text-white transition-all duration-300"
+                  >
+                    <CalendarIcon className="w-4 h-4 mr-2" />
+                    Change Start Date
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-auto p-0 bg-white/10 backdrop-blur-md border-white/20"
+                  align="end"
+                >
+                  <Calendar
+                    mode="single"
+                    selected={challengeStartDate}
+                    onSelect={(date) => {
+                      if (date) {
+                        setChallengeStartDate(date);
+                        setIsDatePickerOpen(false);
+                      }
+                    }}
+                    disabled={(date) =>
+                      date > new Date() || date < new Date("1900-01-01")
+                    }
+                    className="rounded-md bg-white/90 backdrop-blur-md"
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-7 gap-2 md:gap-3">
