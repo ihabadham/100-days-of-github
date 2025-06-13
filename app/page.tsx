@@ -612,7 +612,7 @@ export default function GitHubStreakTracker() {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent
-                  className="w-auto p-0 bg-white/10 backdrop-blur-md border-white/20"
+                  className="w-auto p-0 bg-gradient-to-br from-purple-500/80 via-pink-400/85 to-pink-700/80 backdrop-blur-xl border border-purple-400/40 shadow-2xl shadow-purple-900/40"
                   align="end"
                 >
                   <Calendar
@@ -627,7 +627,7 @@ export default function GitHubStreakTracker() {
                     disabled={(date) =>
                       date > new Date() || date < new Date("1900-01-01")
                     }
-                    className="rounded-md bg-white/90 backdrop-blur-md"
+                    className="rounded-xl"
                     initialFocus
                   />
                 </PopoverContent>
